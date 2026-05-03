@@ -152,7 +152,7 @@ export const botConfig = {
   // =========================
   // INVITE SYSTEM
   // =========================
-  const { Client, GatewayIntentBits } = require('discord.js');
+ const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
   intents: [
@@ -162,68 +162,59 @@ const client = new Client({
   ]
 });
 
-// ===== CONFIG =====
-const config = {
-  welcome: {
-    defaultWelcomeMessage:
-      "🎉 Welcome {user} to {server}!\nInvited by {inviter} who now has {invites} invites!\nWe now have {memberCount} members!",
-    defaultWelcomeChannel: "1500069003157176442" // replace this
-  }
-};
-
-// ===== INVITE CACHE =====
 const invites = new Map();
 
-// ===== READY =====
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(${client.user.tag} is online!);
 
-  client.guilds.cache.forEach(async (guild) => {
+  client.guilds.cache.forEach(async guild => {
     const guildInvites = await guild.invites.fetch();
     invites.set(guild.id, guildInvites);
   });
 });
 
-// ===== NEW INVITE CREATED =====
+// Track invite updates
 client.on('inviteCreate', async invite => {
   const guildInvites = await invite.guild.invites.fetch();
   invites.set(invite.guild.id, guildInvites);
 });
 
-// ===== MEMBER JOIN =====
 client.on('guildMemberAdd', async member => {
+  const channel = member.guild.channels.cache.get('1500069003157176442'); // put your welcome channel ID
+
   const newInvites = await member.guild.invites.fetch();
   const oldInvites = invites.get(member.guild.id);
 
   const usedInvite = newInvites.find(inv =>
-    oldInvites?.get(inv.code)?.uses < inv.uses
+    oldInvites.get(inv.code)?.uses < inv.uses
   );
 
-  // Update cache
+  const inviter = usedInvite?.inviter  'Unknown';
+  const inviteCount = usedInvite?.uses 
+ 0;
+
   invites.set(member.guild.id, newInvites);
 
-  const inviter = usedInvite?.inviter;
-  const inviteCount = usedInvite?.uses;
+  const memberNumber = member.guild.memberCount;
 
-  const channel = member.guild.channels.cache.get(
-    config.welcome.defaultWelcomeChannel
-  );
+  const embed = new EmbedBuilder()
+    .setColor('#ff0000')
+    .setTitle('🔥 Welcome to the Server!')
+    .setDescription(
+      👋 Welcome ${member}!\n\n +
+      📊 You are the **${memberNumber}th member**\n +
+      📨 Invited by: **${inviter.tag || inviter}**\n +
+      🎟️ They now have **${inviteCount} invites**
+    )
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setImage(https://api.dicebear.com/7.x/bottts/png?seed=${member.user.username})
+    .setFooter({ text: 'Enjoy your stay!' })
+    .setTimestamp();
 
-  if (!channel) return;
-
-  // Replace placeholders
-  let message = config.welcome.defaultWelcomeMessage
-    .replace('{user}', `<@${member.id}>`)
-    .replace('{server}', member.guild.name)
-    .replace('{memberCount}', member.guild.memberCount)
-    .replace('{inviter}', inviter ? inviter.tag : 'Unknown')
-    .replace('{invites}', inviteCount || 0);
-
-  channel.send(message);
+  channel.send({ embeds: [embed] });
 });
 
-// ===== LOGIN =====
-client.login("MTUwMDU1NzQ2MDI3NTIwNDIwNg.GEikwz.85a_Osp-Gik9ZEMZ92HwkkTiKvpOimhCi7n0eI");
+client.login('MTUwMDU1NzQ2MDI3NTIwNDIwNg.GEikwz.85a_Osp-Gik9ZEMZ92HwkkTiKvpOimhCi7n0eI');
   // =========================
   // TICKET SYSTEM
   // =========================
