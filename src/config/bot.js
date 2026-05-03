@@ -149,53 +149,81 @@ export const botConfig = {
       url: null,
     },
   },
-
   // =========================
-  // ECONOMY SETTINGS
+  // INVITE SYSTEM
   // =========================
-  economy: {
-    currency: {
-      // Currency display name.
-      name: "coins",
-      // Plural display name.
-      namePlural: "coins",
-      // Currency symbol shown in balances.
-      symbol: "$",
-    },
+  const { Client, GatewayIntentBits } = require('discord.js');
 
-    // Starting balance for new users.
-    startingBalance: 0,
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildInvites
+  ]
+});
 
-    // Maximum bank amount before upgrades (if upgrades are used).
-    baseBankCapacity: 100000,
+// ===== CONFIG =====
+const config = {
+  welcome: {
+    defaultWelcomeMessage:
+      "🎉 Welcome {user} to {server}!\nInvited by {inviter} who now has {invites} invites!\nWe now have {memberCount} members!",
+    defaultWelcomeChannel: "CHANNEL_ID" // replace this
+  }
+};
 
-    // Daily reward amount.
-    dailyAmount: 100,
+// ===== INVITE CACHE =====
+const invites = new Map();
 
-    // Work command random payout range.
-    workMin: 10,
-    workMax: 100,
+// ===== READY =====
+client.once('ready', async () => {
+  console.log(`Logged in as ${client.user.tag}`);
 
-    // Beg command random payout range.
-    begMin: 5,
-    begMax: 50,
+  client.guilds.cache.forEach(async (guild) => {
+    const guildInvites = await guild.invites.fetch();
+    invites.set(guild.id, guildInvites);
+  });
+});
 
-    // Chance to succeed when robbing (0.4 = 40%).
-    robSuccessRate: 0.4,
+// ===== NEW INVITE CREATED =====
+client.on('inviteCreate', async invite => {
+  const guildInvites = await invite.guild.invites.fetch();
+  invites.set(invite.guild.id, guildInvites);
+});
 
-    // Jail time after failed rob (milliseconds).
-    // 3600000 = 1 hour.
-    robFailJailTime: 3600000, 
-  },
+// ===== MEMBER JOIN =====
+client.on('guildMemberAdd', async member => {
+  const newInvites = await member.guild.invites.fetch();
+  const oldInvites = invites.get(member.guild.id);
 
-  // =========================
-  // SHOP SETTINGS
-  // =========================
-  // Add shop defaults here when needed.
-  shop: {
-    
-  },
+  const usedInvite = newInvites.find(inv =>
+    oldInvites?.get(inv.code)?.uses < inv.uses
+  );
 
+  // Update cache
+  invites.set(member.guild.id, newInvites);
+
+  const inviter = usedInvite?.inviter;
+  const inviteCount = usedInvite?.uses;
+
+  const channel = member.guild.channels.cache.get(
+    config.welcome.defaultWelcomeChannel
+  );
+
+  if (!channel) return;
+
+  // Replace placeholders
+  let message = config.welcome.defaultWelcomeMessage
+    .replace('{user}', `<@${member.id}>`)
+    .replace('{server}', member.guild.name)
+    .replace('{memberCount}', member.guild.memberCount)
+    .replace('{inviter}', inviter ? inviter.tag : 'Unknown')
+    .replace('{invites}', inviteCount || 0);
+
+  channel.send(message);
+});
+
+// ===== LOGIN =====
+client.login("YOUR_BOT_TOKEN");
   // =========================
   // TICKET SYSTEM
   // =========================
