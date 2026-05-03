@@ -1,4 +1,5 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, AttachmentBuilder } = require('discord.js');
+const { createCanvas, loadImage } = require('canvas');
 
 const client = new Client({
   intents: [
@@ -9,55 +10,67 @@ const client = new Client({
 });
 
 const invites = new Map();
+const inviteCounts = new Map();
 
 client.once('ready', async () => {
-  console.log(${client.user.tag} is online!);
-
-  client.guilds.cache.forEach(async guild => {
+  client.guilds.cache.forEach(async (guild) => {
     const guildInvites = await guild.invites.fetch();
     invites.set(guild.id, guildInvites);
   });
 });
 
-// Track invite updates
-client.on('inviteCreate', async invite => {
-  const guildInvites = await invite.guild.invites.fetch();
-  invites.set(invite.guild.id, guildInvites);
-});
+client.on('guildMemberAdd', async (member) => {
+  const guild = member.guild;
 
-client.on('guildMemberAdd', async member => {
-  const channel = member.guild.channels.cache.get('1500069003157176442'); // put your welcome channel ID
-
-  const newInvites = await member.guild.invites.fetch();
-  const oldInvites = invites.get(member.guild.id);
+  const oldInvites = invites.get(guild.id);
+  const newInvites = await guild.invites.fetch();
+  invites.set(guild.id, newInvites);
 
   const usedInvite = newInvites.find(inv =>
     oldInvites.get(inv.code)?.uses < inv.uses
   );
 
-  const inviter = usedInvite?.inviter  'Unknown';
-  const inviteCount = usedInvite?.uses 
- 0;
+  const inviter = usedInvite?.inviter  null;
 
-  invites.set(member.guild.id, newInvites);
+  if (inviter) {
+    inviteCounts.set(inviter.id, (inviteCounts.get(inviter.id) 
+ 0) + 1);
+  }
 
-  const memberNumber = member.guild.memberCount;
+  const inviterCount = inviter ? inviteCounts.get(inviter.id) : 0;
 
-  const embed = new EmbedBuilder()
-    .setColor('#ff0000')
-    .setTitle('🔥 Welcome to the Server!')
-    .setDescription(
-      👋 Welcome ${member}!\n\n +
-      📊 You are the **${memberNumber}th member**\n +
-      📨 Invited by: **${inviter.tag || inviter}**\n +
-      🎟️ They now have **${inviteCount} invites**
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setImage(https://api.dicebear.com/7.x/bottts/png?seed=${member.user.username})
-    .setFooter({ text: 'Enjoy your stay!' })
-    .setTimestamp();
+  // 🎨 Create canvas
+  const canvas = createCanvas(800, 250);
+  const ctx = canvas.getContext('2d');
 
-  channel.send({ embeds: [embed] });
+  // Background (you can replace with your own image)
+  const background = await loadImage('https://i.imgur.com/yourBackground.png');
+  ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+
+  // Avatar
+  const avatar = await loadImage(member.user.displayAvatarURL({ extension: 'png' }));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(125, 125, 70, 0, Math.PI * 2, true);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(avatar, 55, 55, 140, 140);
+  ctx.restore();
+
+  // Text
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "28px sans-serif";
+  ctx.fillText(Welcome ${member.user.username}, 220, 100);ctx.font = "20px sans-serif";
+  ctx.fillText(Invited by: ${inviter ? inviter.tag : "Unknown"}, 220, 140);
+  ctx.fillText(Inviter invites: ${inviterCount}, 220, 170);
+  ctx.fillText(Member #${guild.memberCount}, 220, 200);
+
+  const attachment = new AttachmentBuilder(canvas.toBuffer(), { name: 'welcome.png' });
+
+  const channel = guild.channels.cache.find(c => c.name === "welcome");
+  if (!channel) return;
+
+  channel.send({ files: [attachment] });
 });
 
-client.login('MTUwMDU1NzQ2MDI3NTIwNDIwNg.GEikwz.85a_Osp-Gik9ZEMZ92HwkkTiKvpOimhCi7n0eI');
+client.login("MTUwMDU1NzQ2MDI3NTIwNDIwNg.GEikwz.85a_Osp-Gik9ZEMZ92HwkkTiKvpOimhCi7n0eI");
