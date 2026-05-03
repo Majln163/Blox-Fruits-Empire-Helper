@@ -167,7 +167,7 @@ const config = {
   welcome: {
     defaultWelcomeMessage:
       "🎉 Welcome {user} to {server}!\nInvited by {inviter} who now has {invites} invites!\nWe now have {memberCount} members!",
-    defaultWelcomeChannel: "CHANNEL_ID" // replace this
+    defaultWelcomeChannel: "1500069003157176442" // replace this
   }
 };
 
@@ -223,7 +223,7 @@ client.on('guildMemberAdd', async member => {
 });
 
 // ===== LOGIN =====
-client.login("YOUR_BOT_TOKEN");
+client.login("MTUwMDU1NzQ2MDI3NTIwNDIwNg.GEikwz.85a_Osp-Gik9ZEMZ92HwkkTiKvpOimhCi7n0eI");
   // =========================
   // TICKET SYSTEM
   // =========================
