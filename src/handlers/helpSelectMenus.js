@@ -20,7 +20,6 @@ const SUBCOMMAND_GROUP_TYPE = 2;
 const CATEGORY_ICONS = {
     Core: "ℹ️",
     Moderation: "🛡️",
-    Economy: "💰",
     Fun: "🎮",
     Leveling: "📊",
     Utility: "🔧",
@@ -32,7 +31,6 @@ const CATEGORY_ICONS = {
     Search: "🔍",
     Reaction_Roles: "🎭",
     Community: "👥",
-    Birthday: "🎂",
     Config: "⚙️",
 };
 

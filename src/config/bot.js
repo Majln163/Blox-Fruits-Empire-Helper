@@ -1,38 +1,6 @@
 export const botConfig = {
     prefix: '!',
 
-    economy: {
-        currency: {
-            name: 'coin',
-            namePlural: 'coins',
-            symbol: '🪙',
-        },
-        baseBankCapacity: 10000,
-        bankCapacityPerLevel: 5000,
-        dailyAmount: 100,
-        weeklyAmount: 500,
-        workMin: 10,
-        workMax: 100,
-        crimeMin: 50,
-        crimeMax: 300,
-        crimeFailChance: 0.35,
-        robMin: 10,
-        robMax: 500,
-        robFailChance: 0.45,
-        cooldowns: {
-            daily: 24 * 60 * 60 * 1000,
-            weekly: 7 * 24 * 60 * 60 * 1000,
-            work: 60 * 60 * 1000,
-            crime: 2 * 60 * 60 * 1000,
-            rob: 4 * 60 * 60 * 1000,
-            mine: 30 * 60 * 1000,
-            fish: 30 * 60 * 1000,
-            gamble: 5 * 60 * 1000,
-        },
-        shop: {
-            enabled: true,
-        },
-    },
 
     leveling: {
         xpPerMessage: 15,
@@ -109,10 +77,7 @@ export const botConfig = {
         maintenance:       'The bot is currently under maintenance.',
     },
 
-    shop: {
-        enabled: true,
-        currency: 'coin',
-    },
+
 };
 
 export const BotConfig = botConfig;
