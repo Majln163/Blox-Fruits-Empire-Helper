@@ -7,7 +7,7 @@ import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
 import { getServerCounters, updateCounter } from '../services/serverstatsService.js';
 import { setBirthday as dbSetBirthday } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
-import { incrementInvite, recordJoin } from '../services/inviteService.js';
+import { incrementInvite, recordJoin, getInviteData, currentInvites } from '../services/inviteService.js';
 
 export default {
   name: Events.GuildMemberAdd,
@@ -17,6 +17,7 @@ export default {
     try {
         const { guild, user } = member;
 
+        let inviterInfo = null;
         try {
             const newInvites = await guild.fetchInvites();
             const cachedInvites = member.client.inviteCache?.get(guild.id) ?? new Map();
@@ -35,6 +36,11 @@ export default {
             if (usedInvite?.inviter) {
                 await incrementInvite(member.client, guild.id, usedInvite.inviter.id);
                 await recordJoin(member.client, guild.id, user.id, usedInvite.inviter.id, usedInvite.code);
+                const inviterData = await getInviteData(member.client, guild.id, usedInvite.inviter.id);
+                inviterInfo = {
+                    user: usedInvite.inviter,
+                    total: currentInvites(inviterData),
+                };
                 logger.debug(`${user.tag} joined via invite from ${usedInvite.inviter.tag} (code: ${usedInvite.code})`);
             }
         } catch (err) {
@@ -79,15 +85,25 @@ export default {
                         content: messageContent || welcomeMessage
                     });
                 } else {
+                    const embedFields = [
+                        { name: '👤 Member', value: `${user} (${user.tag})`, inline: true },
+                        { name: '👥 Member Count', value: `**${guild.memberCount}**`, inline: true },
+                    ];
+
+                    if (inviterInfo) {
+                        embedFields.push({
+                            name: '📨 Invited By',
+                            value: `${inviterInfo.user} — **${inviterInfo.total}** invite${inviterInfo.total !== 1 ? 's' : ''}`,
+                            inline: false,
+                        });
+                    }
+
                     const embed = new EmbedBuilder()
                         .setColor(welcomeConfig.welcomeEmbed?.color || getColor('success'))
                         .setTitle(embedTitle)
                         .setDescription(welcomeMessage)
                         .setThumbnail(user.displayAvatarURL())
-                        .addFields(
-                            { name: 'User', value: `${user.tag} (${user.id})`, inline: true },
-                            { name: 'Member Count', value: guild.memberCount.toString(), inline: true }
-                        )
+                        .addFields(...embedFields)
                         .setTimestamp()
                         .setFooter({ text: embedFooter });
                     
