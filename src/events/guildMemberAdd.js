@@ -19,7 +19,7 @@ export default {
 
         let inviterInfo = null;
         try {
-            const newInvites = await guild.fetchInvites();
+            const newInvites = await guild.invites.fetch();
             const cachedInvites = member.client.inviteCache?.get(guild.id) ?? new Map();
 
             let usedInvite = null;
@@ -44,7 +44,7 @@ export default {
                 logger.debug(`${user.tag} joined via invite from ${usedInvite.inviter.tag} (code: ${usedInvite.code})`);
             }
         } catch (err) {
-            logger.debug(`Could not track invite for ${user.tag}: ${err.message}`);
+            logger.warn(`Could not track invite for ${user.tag}: ${err.message}`);
         }
         
         const config = await getGuildConfig(member.client, guild.id);
