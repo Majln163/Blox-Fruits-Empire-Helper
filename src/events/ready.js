@@ -21,6 +21,19 @@ export default {
       startupLog(
         `Reaction role reconciliation: scanned ${reconciliationSummary.scannedMessages}, removed ${reconciliationSummary.removedMessages}, errors ${reconciliationSummary.errors}`
       );
+
+      client.inviteCache = new Map();
+      for (const [, guild] of client.guilds.cache) {
+        try {
+          const invites = await guild.fetchInvites();
+          const cache = new Map();
+          invites.forEach((inv) => cache.set(inv.code, inv.uses ?? 0));
+          client.inviteCache.set(guild.id, cache);
+          logger.debug(`Cached ${cache.size} invite(s) for guild ${guild.id}`);
+        } catch {
+          logger.debug(`No invite access for guild ${guild.id} (missing Manage Guild?)`);
+        }
+      }
     } catch (error) {
       logger.error("Error in ready event:", error);
     }

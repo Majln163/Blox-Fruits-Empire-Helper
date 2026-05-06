@@ -7,6 +7,7 @@ import { logEvent, EVENT_TYPES } from '../services/loggingService.js';
 import { getServerCounters, updateCounter } from '../services/serverstatsService.js';
 import { setBirthday as dbSetBirthday } from '../utils/database.js';
 import { logger } from '../utils/logger.js';
+import { incrementInvite, recordJoin } from '../services/inviteService.js';
 
 export default {
   name: Events.GuildMemberAdd,
@@ -15,6 +16,30 @@ export default {
   async execute(member) {
     try {
         const { guild, user } = member;
+
+        try {
+            const newInvites = await guild.fetchInvites();
+            const cachedInvites = member.client.inviteCache?.get(guild.id) ?? new Map();
+
+            let usedInvite = null;
+            newInvites.forEach((invite) => {
+                const cachedUses = cachedInvites.get(invite.code) ?? 0;
+                if (invite.uses > cachedUses) usedInvite = invite;
+            });
+
+            const newCache = new Map();
+            newInvites.forEach((inv) => newCache.set(inv.code, inv.uses ?? 0));
+            if (!member.client.inviteCache) member.client.inviteCache = new Map();
+            member.client.inviteCache.set(guild.id, newCache);
+
+            if (usedInvite?.inviter) {
+                await incrementInvite(member.client, guild.id, usedInvite.inviter.id);
+                await recordJoin(member.client, guild.id, user.id, usedInvite.inviter.id, usedInvite.code);
+                logger.debug(`${user.tag} joined via invite from ${usedInvite.inviter.tag} (code: ${usedInvite.code})`);
+            }
+        } catch (err) {
+            logger.debug(`Could not track invite for ${user.tag}: ${err.message}`);
+        }
         
         const config = await getGuildConfig(member.client, guild.id);
         

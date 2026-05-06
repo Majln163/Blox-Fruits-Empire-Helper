@@ -7,6 +7,7 @@ import { getServerCounters, updateCounter } from '../services/serverstatsService
 import { getGuildBirthdays, deleteBirthday } from '../utils/database.js';
 import { deleteUserLevelData } from '../services/leveling.js';
 import { logger } from '../utils/logger.js';
+import { getJoinRecord, markLeft } from '../services/inviteService.js';
 
 export default {
   name: Events.GuildMemberRemove,
@@ -156,6 +157,17 @@ export default {
             logger.debug(`Removed leveling data for user ${user.id} in guild ${guild.id}`);
         } catch (error) {
             logger.debug('Error handling leveling data on member leave:', error);
+        }
+
+        // Track invite leave — decrement inviter's active invite count
+        try {
+            const record = await getJoinRecord(member.client, guild.id, user.id);
+            if (record?.inviterId) {
+                await markLeft(member.client, guild.id, record.inviterId);
+                logger.debug(`Marked invite leave for inviter ${record.inviterId} (member ${user.id} left)`);
+            }
+        } catch (error) {
+            logger.debug('Error tracking invite leave:', error);
         }
         
     } catch (error) {
