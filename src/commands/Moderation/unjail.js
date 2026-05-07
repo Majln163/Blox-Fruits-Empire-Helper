@@ -1,9 +1,9 @@
-import { SlashCommandBuilder, PermissionFlagsBits, ChannelType } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { successEmbed, errorEmbed } from '../../utils/embeds.js';
-import { logModerationAction, generateCaseId } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
-import { getFromDb, deleteFromDb } from '../../utils/database.js';
+import { getFromDb } from '../../utils/database.js';
+import { unjailMember } from '../../services/jailService.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -40,82 +40,32 @@ export default {
 
             const jailKey = `jail:${interaction.guildId}:${targetUser.id}`;
             const jailData = await getFromDb(jailKey, null);
-
             if (!jailData) {
                 return InteractionHelper.safeEditReply(interaction, {
                     embeds: [errorEmbed(`${targetUser.tag} is not currently jailed.`)]
                 });
             }
 
-            const auditReason = `Unjailed by ${interaction.user.tag}: ${reason}`;
-
-            const channels = interaction.guild.channels.cache.filter(ch =>
-                ch.type !== ChannelType.GuildCategory &&
-                ch.permissionsFor(interaction.guild.members.me)?.has(PermissionFlagsBits.ManageChannels)
-            );
-
-            await Promise.allSettled(
-                channels.map(ch => {
-                    const overwrite = ch.permissionOverwrites.cache.get(targetUser.id);
-                    if (overwrite) {
-                        return overwrite.delete(auditReason);
-                    }
-                    return Promise.resolve();
-                })
-            );
-
-            const jailRole = interaction.guild.roles.cache.find(
-                r => r.name.toLowerCase() === 'jail'
-            );
-            if (jailRole && member.roles.cache.has(jailRole.id)) {
-                await member.roles.remove(jailRole, auditReason);
-            }
-
-            const roleIds = jailData.roles || [];
-            const restored = [];
-            const failed = [];
-
-            for (const roleId of roleIds) {
-                const role = interaction.guild.roles.cache.get(roleId);
-                if (!role) { failed.push(`<deleted role>`); continue; }
-                if (!role.manageable) { failed.push(role.name); continue; }
-                try {
-                    await member.roles.add(role, auditReason);
-                    restored.push(role.name);
-                } catch {
-                    failed.push(role.name);
-                }
-            }
-
-            await deleteFromDb(jailKey);
-
-            const caseId = await generateCaseId(client, interaction.guildId);
-
-            await logModerationAction({
+            const result = await unjailMember({
                 client,
                 guild: interaction.guild,
-                event: {
-                    action: 'Member Unjailed',
-                    target: `${targetUser.tag} (${targetUser.id})`,
-                    executor: `${interaction.user.tag} (${interaction.user.id})`,
-                    reason,
-                    caseId,
-                    metadata: {
-                        rolesRestored: restored.length,
-                        rolesFailed: failed.length,
-                        channelsUnlocked: channels.size,
-                        userId: targetUser.id,
-                        moderatorId: interaction.user.id,
-                    }
-                }
+                userId: targetUser.id,
+                reason,
+                executorTag: `${interaction.user.tag} (manual)`,
             });
+
+            if (!result) {
+                return InteractionHelper.safeEditReply(interaction, {
+                    embeds: [errorEmbed('Failed to unjail — the member may have already left the server.')]
+                });
+            }
 
             const description = [
                 `**Reason:** ${reason}`,
-                `**Roles restored:** ${restored.length}`,
-                failed.length > 0 ? `**Could not restore:** ${failed.join(', ')} (deleted or above bot)` : null,
-                `**Channels unlocked:** ${channels.size}`,
-                `**Case ID:** #${caseId}`,
+                `**Roles restored:** ${result.restored.length}`,
+                result.failed.length > 0 ? `**Could not restore:** ${result.failed.join(', ')} (deleted or above bot)` : null,
+                `**Channels unlocked:** ${result.channelsUnlocked}`,
+                `**Case ID:** #${result.caseId}`,
             ].filter(Boolean).join('\n');
 
             await InteractionHelper.safeEditReply(interaction, {

@@ -10,6 +10,7 @@ import { getGuildConfig } from './services/guildConfig.js';
 import { getServerCounters, saveServerCounters, updateCounter } from './services/serverstatsService.js';
 import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkGiveaways } from './services/giveawayService.js';
+import { checkExpiredJails } from './services/jailService.js';
 import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
 
 class TitanBot extends Client {
@@ -228,6 +229,7 @@ class TitanBot extends Client {
 
   setupCronJobs() {
     cron.schedule('* * * * *', () => checkGiveaways(this));
+    cron.schedule('* * * * *', () => checkExpiredJails(this));
     cron.schedule('*/15 * * * *', () => this.updateAllCounters());
   }
 

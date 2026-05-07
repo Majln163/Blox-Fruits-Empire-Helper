@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { getFromDb, setInDb } from '../../utils/database.js';
 import { getColor } from '../../config/bot.js';
+import { parseDuration, formatDuration } from '../../services/jailService.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -15,6 +16,10 @@ export default {
         )
         .addStringOption(option =>
             option.setName('reason').setDescription('Reason for jailing')
+        )
+        .addStringOption(option =>
+            option.setName('duration')
+                .setDescription('Auto-release after this time (e.g. 30m, 2h, 1d). Leave blank for permanent.')
         )
         .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
     category: 'moderation',
@@ -27,6 +32,7 @@ export default {
             const targetUser = interaction.options.getUser('target');
             const member = interaction.options.getMember('target');
             const reason = interaction.options.getString('reason') || 'No reason provided';
+            const durationStr = interaction.options.getString('duration');
 
             if (!member) {
                 return InteractionHelper.safeEditReply(interaction, {
@@ -47,6 +53,18 @@ export default {
                 return InteractionHelper.safeEditReply(interaction, {
                     embeds: [errorEmbed('I cannot manage this user. They may have a higher role than me.')]
                 });
+            }
+
+            let durationMs = null;
+            if (durationStr) {
+                durationMs = parseDuration(durationStr);
+                if (!durationMs) {
+                    return InteractionHelper.safeEditReply(interaction, {
+                        embeds: [errorEmbed(
+                            'Invalid duration format. Use combinations like `30m`, `2h`, `1d`, `1d12h30m`.'
+                        )]
+                    });
+                }
             }
 
             const jailKey = `jail:${interaction.guildId}:${targetUser.id}`;
@@ -76,9 +94,12 @@ export default {
                 .filter(r => r.id !== interaction.guild.id && r.id !== jailRole.id)
                 .map(r => r.id);
 
+            const expiresAt = durationMs ? new Date(Date.now() + durationMs).toISOString() : null;
+
             await setInDb(jailKey, {
                 roles: savedRoleIds,
                 jailedAt: new Date().toISOString(),
+                expiresAt,
                 reason,
                 moderatorId: interaction.user.id,
             });
@@ -125,8 +146,11 @@ export default {
                     .setTitle('🔒 You have been jailed')
                     .setDescription(
                         `${targetUser}, you have been jailed in **${interaction.guild.name}**.\n\n` +
-                        `**Reason:** ${reason}\n\n` +
-                        `You can only see this channel. Contact a moderator here if you believe this is a mistake.`
+                        `**Reason:** ${reason}\n` +
+                        (durationMs
+                            ? `**Duration:** ${formatDuration(durationMs)} — you will be released automatically.\n`
+                            : `**Duration:** Permanent until a moderator releases you.\n`) +
+                        `\nContact a moderator here if you believe this is a mistake.`
                     )
                     .addFields({ name: 'Moderated by', value: `${interaction.user}`, inline: true })
                     .setTimestamp();
@@ -146,6 +170,7 @@ export default {
                     reason,
                     caseId,
                     metadata: {
+                        duration: durationMs ? formatDuration(durationMs) : 'Permanent',
                         rolesRemoved: savedRoleIds.length,
                         channelsLocked: channels.size,
                         jailChannel: jailChannel ? `#${jailChannel.name}` : 'not configured',
@@ -157,6 +182,7 @@ export default {
 
             const lines = [
                 `**Reason:** ${reason}`,
+                `**Duration:** ${durationMs ? formatDuration(durationMs) + ' (auto-release enabled)' : 'Permanent'}`,
                 `**Roles saved:** ${savedRoleIds.length}`,
                 `**Channels locked:** ${channels.size}`,
                 jailChannel ? `**Jail channel:** ${jailChannel}` : `**Jail channel:** not set — use \`/jailsetup channel\` to configure one`,
