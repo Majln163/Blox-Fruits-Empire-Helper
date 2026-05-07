@@ -1,19 +1,10 @@
-import { SlashCommandBuilder, PermissionFlagsBits, OverwriteType, ChannelType } from 'discord.js';
+import { SlashCommandBuilder, PermissionFlagsBits, OverwriteType, ChannelType, EmbedBuilder } from 'discord.js';
 import { successEmbed, errorEmbed } from '../../utils/embeds.js';
 import { logModerationAction, generateCaseId } from '../../utils/moderation.js';
 import { logger } from '../../utils/logger.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 import { getFromDb, setInDb } from '../../utils/database.js';
-
-const DENY_PERMS = [
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.SendMessagesInThreads,
-    PermissionFlagsBits.AddReactions,
-    PermissionFlagsBits.Speak,
-    PermissionFlagsBits.Connect,
-    PermissionFlagsBits.Stream,
-];
+import { getColor } from '../../config/bot.js';
 
 export default {
     data: new SlashCommandBuilder()
@@ -77,6 +68,10 @@ export default {
                 });
             }
 
+            const jailCfg = await getFromDb(`jailconfig:${interaction.guildId}`, {});
+            const jailChannelId = jailCfg?.channelId || null;
+            const jailChannel = jailChannelId ? interaction.guild.channels.cache.get(jailChannelId) : null;
+
             const savedRoleIds = member.roles.cache
                 .filter(r => r.id !== interaction.guild.id && r.id !== jailRole.id)
                 .map(r => r.id);
@@ -117,6 +112,28 @@ export default {
                 )
             );
 
+            if (jailChannel) {
+                await jailChannel.permissionOverwrites.edit(targetUser.id, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true,
+                    AddReactions: false,
+                }, { reason: auditReason, type: OverwriteType.Member });
+
+                const notifyEmbed = new EmbedBuilder()
+                    .setColor(getColor('error'))
+                    .setTitle('🔒 You have been jailed')
+                    .setDescription(
+                        `${targetUser}, you have been jailed in **${interaction.guild.name}**.\n\n` +
+                        `**Reason:** ${reason}\n\n` +
+                        `You can only see this channel. Contact a moderator here if you believe this is a mistake.`
+                    )
+                    .addFields({ name: 'Moderated by', value: `${interaction.user}`, inline: true })
+                    .setTimestamp();
+
+                await jailChannel.send({ content: `${targetUser}`, embeds: [notifyEmbed] }).catch(() => null);
+            }
+
             const caseId = await generateCaseId(client, interaction.guildId);
 
             await logModerationAction({
@@ -131,17 +148,23 @@ export default {
                     metadata: {
                         rolesRemoved: savedRoleIds.length,
                         channelsLocked: channels.size,
+                        jailChannel: jailChannel ? `#${jailChannel.name}` : 'not configured',
                         userId: targetUser.id,
                         moderatorId: interaction.user.id,
                     }
                 }
             });
 
+            const lines = [
+                `**Reason:** ${reason}`,
+                `**Roles saved:** ${savedRoleIds.length}`,
+                `**Channels locked:** ${channels.size}`,
+                jailChannel ? `**Jail channel:** ${jailChannel}` : `**Jail channel:** not set — use \`/jailsetup channel\` to configure one`,
+                `**Case ID:** #${caseId}`,
+            ].join('\n');
+
             await InteractionHelper.safeEditReply(interaction, {
-                embeds: [successEmbed(
-                    `🔒 **Jailed** ${targetUser.tag}`,
-                    `**Reason:** ${reason}\n**Roles saved:** ${savedRoleIds.length}\n**Channels locked:** ${channels.size}\n**Case ID:** #${caseId}`
-                )]
+                embeds: [successEmbed(`🔒 **Jailed** ${targetUser.tag}`, lines)]
             });
 
         } catch (error) {
